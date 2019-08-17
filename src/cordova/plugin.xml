@@ -19,23 +19,23 @@
             </feature>
         </config-file>     
 
-        <config-file target="app/src/main/AndroidManifest.xml" parent="/manifest/application">
+        <config-file target="AndroidManifest.xml" parent="/manifest/application">
             <meta-data
               android:name="com.google.android.gms.games.APP_ID"
               android:value="@string/app_id" />
         </config-file>
 
-        <config-file target="app/src/main/AndroidManifest.xml" parent="/manifest">
+        <config-file target="AndroidManifest.xml" parent="/manifest">
             <uses-permission android:name="android.permission.INTERNET"/>
             <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>
         </config-file>
 
-        <config-file target="app/src/main/res/values/strings.xml" parent="/resources">
+        <config-file target="res/values/strings.xml" parent="/resources">
             <string name="app_id">$APP_ID</string>
         </config-file>
 
-        <framework src="com.google.android.gms:play-services-games:16.0.0" />
-        <framework src="com.google.android.gms:play-services-plus:16.0.0" />
+        <framework src="com.google.android.gms:play-services-games:16.+" />
+        <framework src="com.google.android.gms:play-services-plus:16.+" />
 
         <js-module src="www/cocoon_googleplaygames.js" name="GooglePlayGames">
             <runs/>
