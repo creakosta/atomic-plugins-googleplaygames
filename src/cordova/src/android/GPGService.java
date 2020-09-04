@@ -11,6 +11,7 @@ import android.net.Uri;
 import android.os.AsyncTask;
 import android.os.Looper;
 import android.support.annotation.NonNull;
+//import androidx.annotation.NonNull;
 
 import com.google.android.gms.common.ConnectionResult;
 import com.google.android.gms.common.GoogleApiAvailability;
@@ -23,10 +24,21 @@ import com.google.android.gms.common.api.Status;
 import com.google.android.gms.common.images.ImageManager;
 import com.google.android.gms.drive.Drive;
 import com.google.android.gms.games.Games;
+import com.google.android.gms.auth.api.signin.GoogleSignIn;
+import com.google.android.gms.auth.api.signin.GoogleSignInAccount;
+import com.google.android.gms.auth.api.signin.GoogleSignInClient;
+import com.google.android.gms.auth.api.signin.GoogleSignInOptions;
+import com.google.android.gms.common.api.ApiException;
+import com.google.android.gms.common.api.Result;
+import com.google.android.gms.drive.Drive;
+import com.google.android.gms.games.AnnotatedData;
+import com.google.android.gms.games.Games;
+import com.google.android.gms.games.GamesClientStatusCodes;
 import com.google.android.gms.games.GamesActivityResultCodes;
 import com.google.android.gms.games.GamesStatusCodes;
 import com.google.android.gms.games.Player;
 import com.google.android.gms.games.Players;
+import com.google.android.gms.games.SnapshotsClient;
 import com.google.android.gms.games.achievement.Achievement;
 import com.google.android.gms.games.achievement.AchievementBuffer;
 import com.google.android.gms.games.achievement.Achievements;
@@ -49,10 +61,22 @@ import java.io.FileOutputStream;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Iterator;
+import java.util.Objects;
 import java.util.concurrent.Executor;
+
+import android.util.Log;
+import com.google.android.gms.tasks.OnCompleteListener;
+import com.google.android.gms.tasks.OnFailureListener;
+import com.google.android.gms.tasks.OnSuccessListener;
+import com.google.android.gms.tasks.Task;
+
+
 
 public class GPGService implements GoogleApiClient.ConnectionCallbacks, GoogleApiClient.OnConnectionFailedListener {
 
+
+    private GoogleSignInClient mGoogleSignInClient;
+    private static final String TAG = "CordovaGamePlugin";
 
     public class Session {
 
@@ -276,12 +300,49 @@ public class GPGService implements GoogleApiClient.ConnectionCallbacks, GoogleAp
     protected Runnable requestPermission = null;
     protected ImageManager imageManager = null;
 
+    // Client used to interact with Google Snapshots.
+    private SnapshotsClient mSnapshotsClient = null;
+
+
     public GPGService(Activity activity)
     {
         sharedInstance = this;
         this.activity = activity;
         this.trySilentAuthentication = this.activity.getPreferences(Activity.MODE_PRIVATE).getBoolean(GP_SIGNED_IN_PREFERENCE, false);
+
+        mGoogleSignInClient = GoogleSignIn.getClient(this.activity,
+                new GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_GAMES_SIGN_IN)
+                        .requestScopes(Drive.SCOPE_APPFOLDER)
+                        .build());
+
+
+        // signInSilently
+        signInSilently();
+
     }
+
+
+
+    public void signInSilently() {
+        Log.d(TAG, "signInSilently()");
+
+        mGoogleSignInClient.silentSignIn().addOnCompleteListener(this.activity,
+                new OnCompleteListener<GoogleSignInAccount>() {
+                    @Override
+                    public void onComplete(@NonNull Task<GoogleSignInAccount> task) {
+                        if (task.isSuccessful()) {
+                            Log.d(TAG, "signInSilently(): success");
+                            onConnectedNew(task.getResult());
+                        } else {
+                            Log.d(TAG, "signInSilently(): failure", task.getException());
+                            onDisconnectedNew();
+                        }
+                    }
+                });
+    }
+
+
+
 
     public void init() {
         this.init(null);
@@ -316,6 +377,43 @@ public class GPGService implements GoogleApiClient.ConnectionCallbacks, GoogleAp
         this.activity = null;
         sharedInstance = null;
     }
+
+    GoogleSignInAccount mSignedInAccount = null;
+
+    private void onConnectedNew(GoogleSignInAccount googleSignInAccount) {
+        Log.d(TAG, "onConnected(): connected to Google APIs");
+        if (mSignedInAccount != googleSignInAccount) {
+
+            mSignedInAccount = googleSignInAccount;
+
+            onAccountChanged(googleSignInAccount);
+        } else {
+            //updateUi();
+        }
+    }
+
+    private void onAccountChanged(GoogleSignInAccount googleSignInAccount) {
+        mSnapshotsClient = Games.getSnapshotsClient(this.activity, googleSignInAccount);
+
+        // Sign-in worked!
+       // log("Sign-in successful! Loading game state from cloud.");
+
+       // showSignOutBar();
+
+     //   showSnapshots(getString(R.string.title_load_game), false, false);
+    }
+
+
+    private void onDisconnectedNew() {
+
+        Log.d(TAG, "onDisconnected()");
+
+        mSnapshotsClient = null;
+       // showSignInBar();
+    }
+
+
+
 
     public void setRequestPermission(Runnable task) {
         requestPermission = task;
@@ -906,20 +1004,26 @@ public class GPGService implements GoogleApiClient.ConnectionCallbacks, GoogleAp
     }
 
     public void loadSavedGame(final String snapshotName, final SavedGameCallback callback) {
-        try {
-            PendingResult<Snapshots.OpenSnapshotResult> pendingResult = Games.Snapshots.open(client, snapshotName, false);
-            ResultCallback<Snapshots.OpenSnapshotResult> cb =
-                    new ResultCallback<Snapshots.OpenSnapshotResult>() {
-                        @Override
-                        public void onResult(Snapshots.OpenSnapshotResult result) {
-                            processSnapshotOpenResult(result, callback, 0);
-                        }
-                    };
-            pendingResult.setResultCallback(cb);
-        }
-        catch (Exception ex) {
-            callback.onComplete(null, new Error(ex.getLocalizedMessage(), 0));
-        }
+
+
+        // was
+//        try {
+//            PendingResult<Snapshots.OpenSnapshotResult> pendingResult = Games.Snapshots.open(client, snapshotName, false);
+//            ResultCallback<Snapshots.OpenSnapshotResult> cb =
+//                    new ResultCallback<Snapshots.OpenSnapshotResult>() {
+//                        @Override
+//                        public void onResult(Snapshots.OpenSnapshotResult result) {
+//                            processSnapshotOpenResult(result, callback, 0);
+//                        }
+//                    };
+//            pendingResult.setResultCallback(cb);
+//        }
+//        catch (Exception ex) {
+//            callback.onComplete(null, new Error(ex.getLocalizedMessage(), 0));
+//        }
+
+
+
     }
 
     public void writeSavedGame(final GameSnapshot snapshotData, final CompletionCallback callback) {
@@ -1248,7 +1352,8 @@ public class GPGService implements GoogleApiClient.ConnectionCallbacks, GoogleAp
     }
 
     public void submitEvent(String eventId, int increment) {
-        Games.Events.increment(client, eventId, increment);
+       // Games.Events.increment(client, eventId, increment);
+        Games.getEventsClient(this.activity, Objects.requireNonNull(GoogleSignIn.getLastSignedInAccount(this.activity))).increment(eventId, increment);
     }
 
     public void loadPlayerStats(final RequestCallback callback) {
